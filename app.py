@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Disease knowledge base (you can expand this later)
+# Disease knowledge base
 diseases = {
     "Flu": {
         "symptoms": ["headache", "fever", "cough", "tiredness"],
@@ -22,28 +22,30 @@ diseases = {
     }
 }
 
-# Store user symptoms in memory (for demo — in real system use session IDs)
+# Store user symptoms in memory (⚠️ for demo — in production use session IDs)
 user_symptoms = []
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     global user_symptoms
-    req = request.get_json()
-    intent = req['queryResult']['intent']['displayName']
-    query_text = req['queryResult']['queryText'].lower()
+    req = request.get_json(silent=True, force=True)
+
+    # Extract intent and query
+    intent = req.get("queryResult", {}).get("intent", {}).get("displayName", "")
+    query_text = req.get("queryResult", {}).get("queryText", "").lower()
 
     response_text = "Sorry, I didn’t understand. Can you repeat?"
 
-    # Welcome Intent
+    # ✅ Welcome Intent
     if intent == "Default Welcome Intent":
         user_symptoms = []  # reset session
         response_text = "Hello! I’m your health assistant 🤖. Please tell me your symptoms one by one."
 
-    # Collect Symptoms
+    # ✅ Collect Symptoms
     elif intent == "GetSymptoms":
-        if query_text != "that's it":
+        if query_text not in ["that's it", "done", "no more", "finished"]:
             user_symptoms.append(query_text)
-            response_text = f"Noted: {query_text}. Any other symptom? (say 'that's it' if done)"
+            response_text = f"Noted: {query_text}. Any other symptom? (say 'that's it' when finished)"
         else:
             # Analyze best matching disease
             best_match = None
@@ -62,15 +64,13 @@ def webhook():
                     f"(⚠️ Note: This is only for awareness, not a medical diagnosis. Please consult a doctor.)"
                 )
             else:
-                response_text = (
-                    "I couldn’t find a clear match. Please consult a healthcare professional."
-                )
+                response_text = "I couldn’t find a clear match. Please consult a healthcare professional."
+
             # Reset after conclusion
             user_symptoms = []
 
-    return jsonify({
-        "fulfillmentText": response_text
-    })
+    return jsonify({"fulfillmentText": response_text})
+
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
